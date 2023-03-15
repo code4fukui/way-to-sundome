@@ -1,0 +1,229 @@
+<meta charset="utf-8" />
+<script type="module">
+import { style } from "https://js.sabae.cc/stdom.js";
+import L from "https://code4sabae.github.io/leaflet-mjs/leaflet.mjs";
+import { Geo3x3 } from "https://geo3x3.com/Geo3x3.js";
+import { CSV } from "https://js.sabae.cc/CSV.js";
+import { QRCode } from "https://code4fukui.github.io/qr-code/qr-code.js";
+import { fetchImage } from "https://js.sabae.cc/fetchImage.js";
+import { CheckBox } from "./CheckBox.js";
+
+window.onload = async () => {
+  const comp = document.body;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href =
+    "https://code4sabae.github.io/leaflet-mjs/leaflet-grayscale.css";
+  comp.appendChild(link);
+  link.onload = () => init();
+};
+const init = async () => {
+  const comp = document.body;
+
+  document.body.style.margin = "0";
+  document.body.style.textAlign = "center";
+  comp.style.backgroundColor = "#D74938";
+  comp.style.color = "white";
+  
+  document.title = "サンドームへの道";
+
+  const header = document.createElement("header");
+  header.style.height = "56px";
+  header.style.margin = ".5em";
+  header.style.display = "grid";
+  header.style.gridTemplate =`
+    "left-button subtitle right-button" 16px
+    "left-button title rigth-button" 24px
+    / 56px 1fr 56px
+  `;
+  header.style.gap = "8px";
+  header.style.placeContent = "center";
+  comp.appendChild(header);
+
+  const title = document.createElement("div");
+  title.textContent = document.title;
+  title.style.fontSize = "24px";
+  title.style.lineHeight = "1";
+  title.style.fontWeight = "bold";
+  title.style.gridArea = "title";
+  header.appendChild(title);
+
+  const div = document.createElement("div");
+  comp.appendChild(div);
+  div.className = "divmap";
+  style({
+    ".divmap": {
+      width: "100%",
+      height: "calc(100vh - 56px)",
+    },
+    "@media print": {
+      // 印刷用CSS
+      ".divmap": {
+        width: "100%",
+        height: "calc(100vh - 2em - 300px)",
+        "background-color": "red",
+      },
+    },
+  });
+
+  const drawer = document.createElement("div");
+  drawer.style.display = "none"; // 最初は非表示にする/表示するときはblock
+  drawer.style.height = "100%";
+  drawer.style.width = "300px";
+  drawer.style.position = "absolute";
+  drawer.style.top = "0";
+  drawer.style.left = "0";
+  drawer.style.zIndex = "1000"; // leafletの上に表示できる最小のz-indexがこれ
+  drawer.style.backgroundColor = "white";
+  drawer.style.color = "black";
+  drawer.style.overflow = "hidden";
+  comp.appendChild(drawer);
+
+  const closeMenuButton = document.createElement("div");
+  closeMenuButton.style.height = "56px";
+  closeMenuButton.style.width = "56px";
+  closeMenuButton.style.padding = "8px";
+  closeMenuButton.style.display = "grid";
+  closeMenuButton.style.placeContent = "center";
+  closeMenuButton.onclick = () => {
+    drawer.style.display = "none";
+  };
+  drawer.appendChild(closeMenuButton)
+
+  const closeMenuIconImage = document.createElement("img");
+  closeMenuIconImage.setAttribute("src", "./images/icon_close.svg");
+  closeMenuIconImage.style.height = "40px";
+  closeMenuIconImage.style.width = "40px";
+  closeMenuButton.appendChild(closeMenuIconImage);
+
+  const drawerItems = document.createElement("div");
+  drawerItems.style.height = "calc(100% - 56px)";
+  drawerItems.style.width = "100%";
+  drawerItems.style.padding = "0 8px 16px";
+  drawerItems.style.overflowY = "scroll";
+  drawerItems.style.display = "flex";
+  drawerItems.style.flexDirection = "column";
+  drawerItems.style.gap = "8px";
+  drawerItems.style.alignItems = "flex-start";
+  drawer.appendChild(drawerItems);
+
+  //
+  const map = L.map(div);
+  // set 国土地理院地図 https://maps.gsi.go.jp/development/ichiran.html
+  L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png", {
+    attribution:
+      '<a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>"',
+    maxZoom: 21,
+    maxNativeZoom: 18,
+  }).addTo(map);
+
+  //
+  const layers = [];
+
+  // アイコン
+  {
+    const pos = [35.930547, 136.185665];
+    const iconw = 64;
+    const opt = {
+      icon: L.icon({
+        iconUrl: "./icon-sundome.png",
+        //iconRetilaUrl: icon,
+        iconSize: [iconw, iconw],
+        iconAnchor: [iconw / 2, iconw / 2],
+        popupAnchor: [0, 0], //[0, -iconh / 2],
+      }),
+    };
+    const marker = L.marker(pos, opt);
+    marker.bindPopup(`
+      <a href=https://digitaltwin-echizen.github.io/vr-sundome/>VRで見るサンドーム福井</a><br>
+      <a href=https://code4fukui.github.io/vr-fukui/vr-view.html#img/vr-sundome.jpg>上空360度で見るサンドーム福井</a><br>
+      <a href=https://sundome.sankan.jp/>サンドーム福井公式サイト</a><br>
+    `);
+    //iconlayer.addLayer(marker);
+    marker.addTo(map);
+  }
+
+  // 経路 geojson
+  const roadLayer = L.layerGroup();
+  const geojsonurl1 = "./way.geojson";
+  console.log(geojsonurl1);
+  const geojson1 = await (await fetch(geojsonurl1)).json();
+  console.log(geojson1);
+  const schoolzone1 = L.geoJson(geojson1, {
+    style: () => {
+      return {
+        color: "#ff0000",
+        opacity: 1,
+        weight: 5,
+      };
+    },
+  });
+  roadLayer.addLayer(schoolzone1);
+  roadLayer.addTo(map);
+  layers.push(["経路", roadLayer]);
+  const idx = (geojson1.features[0].geometry.coordinates.length / 2) >> 0;
+  const ll = geojson1.features[0].geometry.coordinates[idx]; // 真ん中
+  map.setView([ll[1], ll[0]], 15);
+
+  /*
+  // 現在地を取得してピンを打つ
+  const currentPositionMarker = L.marker([36, 140], {title: "現在地"}).addTo(map).bindPopup("現在地");
+  navigator.geolocation.getCurrentPosition((position) => {
+    const currentLoc = [position.coords.latitude, position.coords.longitude];
+    currentPositionMarker.setLatLng(currentLoc);
+  })
+
+  // 現在地を監視してピン/マップを動かす
+  const watchGPS = new CheckBox("現在地追従モード")
+  let watchPosition;
+  watchGPS.checked = false
+  watchGPS.onchange = () => {
+    if (watchGPS.checked) {
+      watchPosition = navigator.geolocation.watchPosition((position) => {
+        const currentLoc = [position.coords.latitude, position.coords.longitude];
+        currentPositionMarker.setLatLng(currentLoc);
+        map.setView(currentLoc, 16);
+      });
+    } else {
+      navigator.geolocation.clearWatch(watchPosition);
+    }
+  };
+  drawerItems.appendChild(watchGPS);
+  */
+ 
+  // footer
+  const links = [
+    { text: "データ編集や閲覧はGitHubで", url: "https://github.com/code4fukui/kunitaka/tree/main/kidssafe" },
+    { text: "アイコン（きけん、急ブレーキ、急加速） CC BY okiku.graphic", url: "https://www.instagram.com/okame.graphic/" },
+    { text: "アイコン（その他） by いらすとや", url: "https://www.irasutoya.com/" },
+    { text: "下記データは、オープンデータライセンスでご利用いただけます", url: "https://github.com/code4fukui/opendata-license/" },
+    { text: "テレマティクスオープンデータ by あいおいニッセイ同和損保", url: "https://www.aioinissaydowa.co.jp/" },
+    { text: "地域安全オープンデータ by 国高地区自治振興会", url: "https://www.city.echizen.lg.jp/office/010/130030/kunitaka.html" },
+    { text: "街灯オープンデータ by 越前市", url: "http://www.city.echizen.lg.jp/index.html" },
+  ];
+  for (const link of links) {
+    const a = document.createElement("a");
+    a.style.display = "block";
+    a.style.textAlign = "left";
+    a.textContent = link.text;
+    a.href = link.url; // "https://github.com/code4fukui/kunitaka/";
+    drawerItems.appendChild(a);
+  }
+
+  const qr = new QRCode();
+  qr.style.width = "100%";
+  qr.style.display = "grid";
+  qr.style.placeContent = "center";
+  drawerItems.appendChild(qr);
+};
+</script>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+.selectlayers {
+  margin: 1em;
+}
+</style>
